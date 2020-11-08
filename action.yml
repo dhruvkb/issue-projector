@@ -1,0 +1,26 @@
+name: 'Issue projector'
+author: 'Dhruv Bhanushali'
+description: '🤖 Automatically find issues updated within the given time period and add them to a GitHub Project.'
+inputs:
+  ACCESS_TOKEN:
+    description: 'An authorised Personal Access Token from GitHub'
+    required: true
+  ORG_NAME:
+    description: 'The GitHub username of the organisation'
+    required: true
+  PROJECT_NAME:
+    description: 'The name of the project board within the org'
+    required: true
+  COLUMN_NAME:
+    description: 'The name of the column within the project board'
+    required: true
+  INTERVAL:
+    description: 'The number of days to check for updated issues'
+    required: false
+    default: '1'
+runs:
+  using: 'node12'
+  main: 'dist/index.js'
+branding:
+  icon: 'move'
+  color: 'orange'
