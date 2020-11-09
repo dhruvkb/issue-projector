@@ -5,19 +5,18 @@ import { Issue, Error } from './types'
 import { todayOffset } from './util'
 
 /**
- * Get the ID of the column with the given name in the given project of the
- * given organisation.
+ * Get the ID of a project with the given number in the given organisation.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
  * @param {number} projectNumber - the number of the project within the org
- * @param {string} columnName - the name of the column within the project board
+ *
+ * @return {number} - the absolute ID of the project
  */
-async function getColumnId (
+async function getProjectId(
     client: Octokit,
     orgName: string,
-    projectNumber: number,
-    columnName: string
+    projectNumber: number
 ): Promise<number> {
 
   // Fetching projects
@@ -31,6 +30,24 @@ async function getColumnId (
   const { id: projectId, name: projectName }: { id: number, name: string } = project
   core.info(`Project ID: ${projectId}`)
   core.info(`Project Name: ${projectName}`)
+
+  return projectId
+}
+
+/**
+ * Get the ID of the column with the given name in the given project.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {number} projectId - the absolute ID of the project
+ * @param {string} columnName - the name of the column within the project board
+ *
+ * @return {number} - the absolute ID of the column
+ */
+async function getColumnId (
+    client: Octokit,
+    projectId: number,
+    columnName: string
+): Promise<number> {
 
   // Fetching column
   const { data: columns } = await client.projects.listColumns({ project_id: projectId })
@@ -104,7 +121,8 @@ export async function fileIssues (
 ): Promise<void> {
 
   // Find column
-  const columnId: number = await getColumnId(client, orgName, projectNumber, columnName)
+  const projectId: number = await getProjectId(client, orgName, projectNumber)
+  const columnId: number = await getColumnId(client, projectId, columnName)
   // Find issues
   const issues: Array<Issue> = await getIssues(client, orgName, interval)
 
