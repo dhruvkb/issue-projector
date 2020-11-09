@@ -15,8 +15,8 @@ async function main (): Promise<void> {
     const orgName: string = core.getInput('ORG_NAME', opts)
     core.debug(`Org name: ${orgName}`)
 
-    const projectName: string = core.getInput('PROJECT_NAME', opts)
-    core.debug(`Project name: ${projectName}`)
+    const projectNumber: number = parseInt(core.getInput('PROJECT_NUMBER', opts))
+    core.debug(`Project number: ${projectNumber}`)
 
     const columnName: string = core.getInput('COLUMN_NAME', opts)
     core.debug(`Column name: ${columnName}`)
@@ -27,7 +27,7 @@ async function main (): Promise<void> {
     // Prepare Octokit client
     const client: Octokit = getClient(accessToken)
     // Perform wonders with the client
-    await fileIssues(client, orgName, projectName, columnName, interval)
+    await fileIssues(client, orgName, projectNumber, columnName, interval)
   } catch (ex) {
     core.setFailed(ex.message)
   }

@@ -10,26 +10,27 @@ import { todayOffset } from './util'
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
- * @param {string} projectName - the name of the project board within the org
+ * @param {number} projectNumber - the number of the project within the org
  * @param {string} columnName - the name of the column within the project board
  */
 async function getColumnId (
     client: Octokit,
     orgName: string,
-    projectName: string,
+    projectNumber: number,
     columnName: string
 ): Promise<number> {
 
   // Fetching projects
   const { data: projects } = await client.projects.listForOrg({ org: orgName })
-  const project = projects.find(proj => proj.name === projectName)
+  const project = projects.find(proj => proj.number === projectNumber)
   if (!project) {
     throw new Error('Project not found')
   }
 
   // Project found
-  const { id: projectId }: { id: number } = project
+  const { id: projectId, name: projectName }: { id: number, name: string } = project
   core.info(`Project ID: ${projectId}`)
+  core.info(`Project Name: ${projectName}`)
 
   // Fetching column
   const { data: columns } = await client.projects.listColumns({ project_id: projectId })
@@ -90,20 +91,20 @@ async function getIssues (
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
- * @param {string} projectName - the name of the project board within the org
+ * @param {number} projectNumber - the number of the project within the org
  * @param {string} columnName - the name of the column within the project board
  * @param {number} interval - the number of days to check for updated issues
  */
 export async function fileIssues (
     client: Octokit,
     orgName: string,
-    projectName: string,
+    projectNumber: number,
     columnName: string,
     interval: number
 ): Promise<void> {
 
   // Find column
-  const columnId: number = await getColumnId(client, orgName, projectName, columnName)
+  const columnId: number = await getColumnId(client, orgName, projectNumber, columnName)
   // Find issues
   const issues: Array<Issue> = await getIssues(client, orgName, interval)
 
