@@ -47,7 +47,7 @@ async function getColumnId (
 }
 
 /**
- * Get a list of issues updated yesterday. This is not exactly 24 hours but
+ * Get a list of issues created yesterday. This is not exactly 24 hours but
  * rather includes the entirety of 'yesterday' as well as whatever part of
  * 'today' has elapsed when this runs.
  *
@@ -67,7 +67,7 @@ async function getIssues (
     'is:open',
     'is:issue',
     `org:${orgName}`,
-    `updated:>=${yesterday}`
+    `created:>=${yesterday}`
   ].join('+')
 
   // Fetch issues
