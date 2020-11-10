@@ -13,7 +13,7 @@ import { todayOffset } from './util'
  *
  * @return {number} - the absolute ID of the project
  */
-async function getProjectId(
+async function getProjectId (
     client: Octokit,
     orgName: string,
     projectNumber: number
@@ -71,6 +71,8 @@ async function getColumnId (
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
  * @param {number} interval - the number of days to check for updated issues
+ *
+ * @return {Array} the list of issues created in the given interval
  */
 async function getIssues (
     client: Octokit,
@@ -105,6 +107,9 @@ async function getIssues (
 }
 
 /**
+ * Add all issues created in the last time interval to the given project in the
+ * given org under the given column. Issues that are already present in the
+ * given excluded project will be ignored.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
