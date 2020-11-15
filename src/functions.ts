@@ -1,7 +1,7 @@
 import * as core from '@actions/core'
 import { Octokit } from '@octokit/rest'
 
-import { Issue, Error } from './types'
+import { Error as GitHubError, Issue } from './types'
 import { todayOffset } from './util'
 
 /**
@@ -237,7 +237,7 @@ async function performFiling (
           core.info(`Card creation succeeded for issue '${issue.title}'.`)
         })
         .catch(ex => {
-          const all_errors = ex.errors.map((error: Error) => error.message)
+          const all_errors = ex.errors.map((error: GitHubError) => error.message)
           const false_alarm = 'Project already has the associated issue'
 
           if (all_errors.includes(false_alarm)) {
