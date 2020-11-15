@@ -224,7 +224,7 @@ async function performFiling (
   newIssues
     .filter((issue: Issue): boolean => {
       if (excludedIssues.has(issue.id)) {
-        console.log(`Ignoring issue '${issue.title}' as it belongs to excluded project`)
+        core.warning(`Ignoring issue '${issue.title}' as it belongs to excluded project`)
         return false
       } else {
         return true

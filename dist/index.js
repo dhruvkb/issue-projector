@@ -5273,7 +5273,7 @@ function performFiling(client, columnId, newIssues, excludedIssues) {
             newIssues
                 .filter(function (issue) {
                 if (excludedIssues.has(issue.id)) {
-                    console.log("Ignoring issue '" + issue.title + "' as it belongs to excluded project");
+                    core.warning("Ignoring issue '" + issue.title + "' as it belongs to excluded project");
                     return false;
                 }
                 else {
