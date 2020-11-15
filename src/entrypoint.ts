@@ -21,13 +21,19 @@ async function main (): Promise<void> {
     const columnName: string = core.getInput('COLUMN_NAME', opts)
     core.debug(`Column name: ${columnName}`)
 
+    let excludedProjectNumber: number | null = parseInt(core.getInput('EXCLUDED_PROJECT_NUMBER') || '-1')
+    if (excludedProjectNumber === -1) {
+      excludedProjectNumber = null
+    }
+    core.debug(`Excluded project number: ${excludedProjectNumber === null ? 'NA' : excludedProjectNumber}`)
+
     let interval: number = parseInt(core.getInput('INTERVAL') || '1')
     core.debug(`Interval: ${interval}`)
 
     // Prepare Octokit client
     const client: Octokit = getClient(accessToken)
     // Perform wonders with the client
-    await fileIssues(client, orgName, projectNumber, columnName, interval)
+    await fileIssues(client, orgName, projectNumber, columnName, interval, excludedProjectNumber)
   } catch (ex) {
     core.setFailed(ex.message)
   }
