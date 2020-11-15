@@ -8,12 +8,20 @@ inputs:
   ORG_NAME:
     description: 'The GitHub username of the organisation'
     required: true
-  PROJECT_NAME:
-    description: 'The name of the project board within the org'
+  PROJECT_NUMBER:
+    description: 'The number of the project board within the org'
     required: true
   COLUMN_NAME:
     description: 'The name of the column within the project board'
     required: true
+  EXCLUDED_PROJECT_NUMBER:
+    description: 'The number of the excluded project within the org'
+    required: false
+    default: '-1'
+  ISSUE_TYPE:
+    description: 'Whether to find new issues, PRs or both'
+    required: false
+    default: 'any'
   INTERVAL:
     description: 'The number of days to check for updated issues'
     required: false
