@@ -27,13 +27,19 @@ async function main (): Promise<void> {
     }
     core.debug(`Excluded project number: ${excludedProjectNumber === null ? 'NA' : excludedProjectNumber}`)
 
+    let issueType: string = core.getInput('ISSUE_TYPE') || 'any'
+    if (!['any', 'issue', 'pr'].includes(issueType)) {
+      throw new Error('Invalid issue type specified')
+    }
+    core.debug(`Issue type: ${issueType}`)
+
     let interval: number = parseInt(core.getInput('INTERVAL') || '1')
     core.debug(`Interval: ${interval}`)
 
     // Prepare Octokit client
     const client: Octokit = getClient(accessToken)
     // Perform wonders with the client
-    await fileIssues(client, orgName, projectNumber, columnName, interval, excludedProjectNumber)
+    await fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval)
   } catch (ex) {
     core.setFailed(ex.message)
   }

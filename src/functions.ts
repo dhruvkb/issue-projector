@@ -110,6 +110,7 @@ async function getColumnId (
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
+ * @param {string} issueType - whether to find new issues, PRs or both
  * @param {number} interval - the number of days to check for updated issues
  *
  * @return {Array} the list of issues created in the given interval
@@ -117,17 +118,21 @@ async function getColumnId (
 async function getNewIssues (
   client: Octokit,
   orgName: string,
+  issueType: string,
   interval: number
 ): Promise<Array<Issue>> {
 
   // Prepare search query
   const [yesterday,] = todayOffset(-interval).toISOString().split('T')
-  const q = [
+  const criteria = [
     'is:open',
-    'is:issue',
     `org:${orgName}`,
     `created:>=${yesterday}`
-  ].join('+')
+  ]
+  if (issueType != 'any') {
+    criteria.push(`is:${issueType}`)
+  }
+  const q = criteria.join('+')
 
   // Fetch issues
   const newIssues: Array<Issue> = []
@@ -258,16 +263,18 @@ async function performFiling (
  * @param {string} orgName - the GitHub username of the organisation
  * @param {number} projectNumber - the number of the project within the org
  * @param {string} columnName - the name of the column within the project board
- * @param {number} interval - the number of days to check for updated issues
  * @param {number} excludedProjectNumber - the number of the excluded project within the org
+ * @param {string} issueType - whether to find new issues, PRs or both
+ * @param {number} interval - the number of days to check for updated issues
  */
 export async function fileIssues (
   client: Octokit,
   orgName: string,
   projectNumber: number,
   columnName: string,
-  interval: number,
-  excludedProjectNumber: number | null
+  excludedProjectNumber: number | null,
+  issueType: string,
+  interval: number
 ): Promise<void> {
 
   // Find column
@@ -275,7 +282,7 @@ export async function fileIssues (
   const columnId: number = await getColumnId(client, projectId, columnName)
 
   // Find new issues
-  const newIssues: Array<Issue> = await getNewIssues(client, orgName, interval)
+  const newIssues: Array<Issue> = await getNewIssues(client, orgName, issueType, interval)
 
   // Find excluded issues
   let excludedIssueIds: Set<number> = new Set<number>()
