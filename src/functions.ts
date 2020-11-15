@@ -93,12 +93,16 @@ async function getIssues (
   const allIssues: Array<Issue> = []
   for await (const response of client.paginate.iterator(
       client.search.issuesAndPullRequests,
-      { q }
+      {
+        q,
+        per_page: 100
+      }
   )) {
     const { data: issues } = response
     allIssues.push(...issues.map(issue => ({
       id: issue.id,
-      title: issue.title
+      title: issue.title,
+      isPullRequest: Object.prototype.hasOwnProperty.call(issue, 'pull_request')
     })))
     core.debug(`Fetched ${allIssues.length}/${issues.total_count} issues.`)
   }
