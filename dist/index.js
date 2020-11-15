@@ -4870,7 +4870,7 @@ var client_1 = __webpack_require__(970);
 var functions_1 = __webpack_require__(174);
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var opts, accessToken, orgName, projectName, columnName, interval, client, ex_1;
+        var opts, accessToken, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval, client, ex_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -4880,15 +4880,25 @@ function main() {
                     core.debug("Access token: " + (accessToken.length === 40 ? 'OK' : 'Not OK'));
                     orgName = core.getInput('ORG_NAME', opts);
                     core.debug("Org name: " + orgName);
-                    projectName = core.getInput('PROJECT_NAME', opts);
-                    core.debug("Project name: " + projectName);
+                    projectNumber = parseInt(core.getInput('PROJECT_NUMBER', opts));
+                    core.debug("Project number: " + projectNumber);
                     columnName = core.getInput('COLUMN_NAME', opts);
                     core.debug("Column name: " + columnName);
+                    excludedProjectNumber = parseInt(core.getInput('EXCLUDED_PROJECT_NUMBER') || '-1');
+                    if (excludedProjectNumber === -1) {
+                        excludedProjectNumber = null;
+                    }
+                    core.debug("Excluded project number: " + (excludedProjectNumber === null ? 'NA' : excludedProjectNumber));
+                    issueType = core.getInput('ISSUE_TYPE') || 'any';
+                    if (!['any', 'issue', 'pr'].includes(issueType)) {
+                        throw new Error('Invalid issue type specified');
+                    }
+                    core.debug("Issue type: " + issueType);
                     interval = parseInt(core.getInput('INTERVAL') || '1');
                     core.debug("Interval: " + interval);
                     client = client_1.getClient(accessToken);
                     // Perform wonders with the client
-                    return [4 /*yield*/, functions_1.fileIssues(client, orgName, projectName, columnName, interval)];
+                    return [4 /*yield*/, functions_1.fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval)];
                 case 1:
                     // Perform wonders with the client
                     _a.sent();
@@ -4979,30 +4989,99 @@ exports.fileIssues = void 0;
 var core = __importStar(__webpack_require__(186));
 var util_1 = __webpack_require__(629);
 /**
- * Get the ID of the column with the given name in the given project of the
- * given organisation.
+ * Get the details of the issue from the given API URL.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {string} url - the API URL of the issue
+ *
+ * @return {Issue} - the issue described by the API URL
+ */
+function getIssue(client, url) {
+    return __awaiter(this, void 0, void 0, function () {
+        var data, issue;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, client.request(url)];
+                case 1:
+                    data = (_a.sent()).data;
+                    issue = {
+                        id: data.id,
+                        title: data.title,
+                        isPullRequest: Object.prototype.hasOwnProperty.call(data, 'pull_request')
+                    };
+                    core.info("Issue: #" + issue.id + " " + issue.title);
+                    return [2 /*return*/, issue];
+            }
+        });
+    });
+}
+/**
+ * Get the ID of a project with the given number in the given organisation.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
- * @param {string} projectName - the name of the project board within the org
- * @param {string} columnName - the name of the column within the project board
+ * @param {number} projectNumber - the number of the project within the org
+ *
+ * @return {number} - the absolute ID of the project
  */
-function getColumnId(client, orgName, projectName, columnName) {
+function getProjectId(client, orgName, projectNumber) {
     return __awaiter(this, void 0, void 0, function () {
-        var projects, project, projectId, columns, column, columnId;
+        var projects, project, projectId, projectName;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, client.projects.listForOrg({ org: orgName })];
                 case 1:
                     projects = (_a.sent()).data;
-                    project = projects.find(function (proj) { return proj.name === projectName; });
+                    project = projects.find(function (proj) { return proj.number === projectNumber; });
                     if (!project) {
                         throw new Error('Project not found');
                     }
-                    projectId = project.id;
+                    projectId = project.id, projectName = project.name;
                     core.info("Project ID: " + projectId);
-                    return [4 /*yield*/, client.projects.listColumns({ project_id: projectId })];
-                case 2:
+                    core.info("Project Name: " + projectName);
+                    return [2 /*return*/, projectId];
+            }
+        });
+    });
+}
+/**
+ * Get the IDs of all columns in the given project.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {number} projectId - the absolute ID of the project
+ *
+ * @return {Array} - the absolute IDs of all columns
+ */
+function getColumnIds(client, projectId) {
+    return __awaiter(this, void 0, void 0, function () {
+        var columns;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, client.projects.listColumns({ project_id: projectId })];
+                case 1:
+                    columns = (_a.sent()).data;
+                    core.info("Retrieved " + columns.length + " columns");
+                    return [2 /*return*/, columns.map(function (col) { return col.id; })];
+            }
+        });
+    });
+}
+/**
+ * Get the ID of the column with the given name in the given project.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {number} projectId - the absolute ID of the project
+ * @param {string} columnName - the name of the column within the project board
+ *
+ * @return {number} - the absolute ID of the column
+ */
+function getColumnId(client, projectId, columnName) {
+    return __awaiter(this, void 0, void 0, function () {
+        var columns, column, columnId;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, client.projects.listColumns({ project_id: projectId })];
+                case 1:
                     columns = (_a.sent()).data;
                     column = columns.find(function (col) { return col.name === columnName; });
                     if (!column) {
@@ -5016,44 +5095,54 @@ function getColumnId(client, orgName, projectName, columnName) {
     });
 }
 /**
- * Get a list of issues updated yesterday. This is not exactly 24 hours but
+ * Get a list of issues created yesterday. This is not exactly 24 hours but
  * rather includes the entirety of 'yesterday' as well as whatever part of
  * 'today' has elapsed when this runs.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
+ * @param {string} issueType - whether to find new issues, PRs or both
  * @param {number} interval - the number of days to check for updated issues
+ *
+ * @return {Array} the list of issues created in the given interval
  */
-function getIssues(client, orgName, interval) {
+function getNewIssues(client, orgName, issueType, interval) {
     var e_1, _a;
     return __awaiter(this, void 0, void 0, function () {
-        var yesterday, q, allIssues, _b, _c, response, issues, e_1_1;
+        var yesterday, criteria, q, newIssues, _b, _c, response, issues, e_1_1;
         return __generator(this, function (_d) {
             switch (_d.label) {
                 case 0:
                     yesterday = util_1.todayOffset(-interval).toISOString().split('T')[0];
-                    q = [
+                    criteria = [
                         'is:open',
-                        'is:issue',
                         "org:" + orgName,
-                        "updated:>=" + yesterday
-                    ].join('+');
-                    allIssues = [];
+                        "created:>=" + yesterday
+                    ];
+                    if (issueType != 'any') {
+                        criteria.push("is:" + issueType);
+                    }
+                    q = criteria.join('+');
+                    newIssues = [];
                     _d.label = 1;
                 case 1:
                     _d.trys.push([1, 6, 7, 12]);
-                    _b = __asyncValues(client.paginate.iterator(client.search.issuesAndPullRequests, { q: q }));
+                    _b = __asyncValues(client.paginate.iterator(client.search.issuesAndPullRequests, {
+                        q: q,
+                        per_page: 100
+                    }));
                     _d.label = 2;
                 case 2: return [4 /*yield*/, _b.next()];
                 case 3:
                     if (!(_c = _d.sent(), !_c.done)) return [3 /*break*/, 5];
                     response = _c.value;
                     issues = response.data;
-                    allIssues.push.apply(allIssues, issues.map(function (issue) { return ({
+                    newIssues.push.apply(newIssues, issues.map(function (issue) { return ({
                         id: issue.id,
-                        title: issue.title
+                        title: issue.title,
+                        isPullRequest: Object.prototype.hasOwnProperty.call(issue, 'pull_request')
                     }); }));
-                    core.debug("Fetched " + allIssues.length + "/" + issues.total_count + " issues.");
+                    core.debug("Fetched " + newIssues.length + "/" + issues.total_count + " issues.");
                     _d.label = 4;
                 case 4: return [3 /*break*/, 2];
                 case 5: return [3 /*break*/, 12];
@@ -5073,56 +5162,193 @@ function getIssues(client, orgName, interval) {
                     if (e_1) throw e_1.error;
                     return [7 /*endfinally*/];
                 case 11: return [7 /*endfinally*/];
-                case 12: return [2 /*return*/, allIssues];
+                case 12:
+                    core.info("Retrieved " + newIssues.length + " new issues");
+                    return [2 /*return*/, newIssues];
             }
         });
     });
 }
 /**
+ * Get a list of issue IDs that are present in the excluded project. This also
+ * includes IDs of pull requests.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
- * @param {string} projectName - the name of the project board within the org
- * @param {string} columnName - the name of the column within the project board
- * @param {number} interval - the number of days to check for updated issues
+ * @param {number} excludedProjectId - the absolute ID of the excluded project
+ *
+ * @return {Set} the set of issues that are added to the excluded project
  */
-function fileIssues(client, orgName, projectName, columnName, interval) {
+function getExcludedIssueIds(client, orgName, excludedProjectId) {
+    var e_2, _a;
     return __awaiter(this, void 0, void 0, function () {
-        var columnId, issues;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0: return [4 /*yield*/, getColumnId(client, orgName, projectName, columnName)
-                    // Find issues
+        var columnIds, excludedIssueIds, _i, columnIds_1, columnId, _b, _c, response, cards, issues, e_2_1;
+        var _this = this;
+        return __generator(this, function (_d) {
+            switch (_d.label) {
+                case 0: return [4 /*yield*/, getColumnIds(client, excludedProjectId)
+                    // Fetch issues
                 ];
                 case 1:
-                    columnId = _a.sent();
-                    return [4 /*yield*/, getIssues(client, orgName, interval)
-                        // Add issues to column
+                    columnIds = _d.sent();
+                    excludedIssueIds = new Set();
+                    _i = 0, columnIds_1 = columnIds;
+                    _d.label = 2;
+                case 2:
+                    if (!(_i < columnIds_1.length)) return [3 /*break*/, 16];
+                    columnId = columnIds_1[_i];
+                    _d.label = 3;
+                case 3:
+                    _d.trys.push([3, 9, 10, 15]);
+                    _b = (e_2 = void 0, __asyncValues(client.paginate.iterator(client.projects.listCards, {
+                        column_id: columnId,
+                        archived_state: 'all',
+                        per_page: 100
+                    })));
+                    _d.label = 4;
+                case 4: return [4 /*yield*/, _b.next()];
+                case 5:
+                    if (!(_c = _d.sent(), !_c.done)) return [3 /*break*/, 8];
+                    response = _c.value;
+                    cards = response.data;
+                    return [4 /*yield*/, Promise.all(cards
+                            .filter(function (card) { return Boolean(card.content_url); })
+                            .map(function (card) { return __awaiter(_this, void 0, void 0, function () {
+                            var content_url;
+                            return __generator(this, function (_a) {
+                                switch (_a.label) {
+                                    case 0:
+                                        content_url = card.content_url;
+                                        return [4 /*yield*/, getIssue(client, content_url)];
+                                    case 1: return [2 /*return*/, _a.sent()];
+                                }
+                            });
+                        }); }))];
+                case 6:
+                    issues = _d.sent();
+                    issues.forEach(function (issue) {
+                        excludedIssueIds.add(issue.id);
+                    });
+                    _d.label = 7;
+                case 7: return [3 /*break*/, 4];
+                case 8: return [3 /*break*/, 15];
+                case 9:
+                    e_2_1 = _d.sent();
+                    e_2 = { error: e_2_1 };
+                    return [3 /*break*/, 15];
+                case 10:
+                    _d.trys.push([10, , 13, 14]);
+                    if (!(_c && !_c.done && (_a = _b.return))) return [3 /*break*/, 12];
+                    return [4 /*yield*/, _a.call(_b)];
+                case 11:
+                    _d.sent();
+                    _d.label = 12;
+                case 12: return [3 /*break*/, 14];
+                case 13:
+                    if (e_2) throw e_2.error;
+                    return [7 /*endfinally*/];
+                case 14: return [7 /*endfinally*/];
+                case 15:
+                    _i++;
+                    return [3 /*break*/, 2];
+                case 16:
+                    core.info("Retrieved " + excludedIssueIds.size + " excluded issues");
+                    return [2 /*return*/, excludedIssueIds];
+            }
+        });
+    });
+}
+/**
+ * Add the given new issues to the given project column. This skips over issues
+ * that are present in the excluded project.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {string} columnId - the absolute ID of the column within the project board
+ * @param {Array} newIssues - the list of issues created in the given interval
+ * @param {Set} excludedIssues - the set of issues that are added to the excluded project
+ */
+function performFiling(client, columnId, newIssues, excludedIssues) {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            newIssues
+                .filter(function (issue) {
+                if (excludedIssues.has(issue.id)) {
+                    console.log("Ignoring issue '" + issue.title + "' as it belongs to excluded project");
+                    return false;
+                }
+                else {
+                    return true;
+                }
+            })
+                .forEach(function (issue) {
+                // Add non-excluded issues
+                client.projects
+                    .createCard({
+                    column_id: columnId,
+                    content_id: issue.id,
+                    content_type: 'Issue'
+                })
+                    .then(function () {
+                    core.info("Card creation succeeded for issue '" + issue.title + "'.");
+                })
+                    .catch(function (ex) {
+                    var all_errors = ex.errors.map(function (error) { return error.message; });
+                    var false_alarm = 'Project already has the associated issue';
+                    if (all_errors.includes(false_alarm)) {
+                        core.warning("Card already exists for issue '" + issue.title + "'.");
+                    }
+                    else {
+                        core.error("Card creation failed for issue '" + issue.title + "'.");
+                    }
+                });
+            });
+            return [2 /*return*/];
+        });
+    });
+}
+/**
+ * Add all issues created in the last time interval to the given project in the
+ * given org under the given column. Issues that are already present in the
+ * given excluded project will be ignored.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {string} orgName - the GitHub username of the organisation
+ * @param {number} projectNumber - the number of the project within the org
+ * @param {string} columnName - the name of the column within the project board
+ * @param {number} excludedProjectNumber - the number of the excluded project within the org
+ * @param {string} issueType - whether to find new issues, PRs or both
+ * @param {number} interval - the number of days to check for updated issues
+ */
+function fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval) {
+    return __awaiter(this, void 0, void 0, function () {
+        var projectId, columnId, newIssues, excludedIssueIds, excludedProjectId;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, getProjectId(client, orgName, projectNumber)];
+                case 1:
+                    projectId = _a.sent();
+                    return [4 /*yield*/, getColumnId(client, projectId, columnName)
+                        // Find new issues
                     ];
                 case 2:
-                    issues = _a.sent();
-                    // Add issues to column
-                    issues.forEach(function (issue) {
-                        client.projects
-                            .createCard({
-                            column_id: columnId,
-                            content_id: issue.id,
-                            content_type: 'Issue'
-                        })
-                            .then(function () {
-                            core.info("Card creation succeeded for issue '" + issue.title + "'.");
-                        })
-                            .catch(function (ex) {
-                            var all_errors = ex.errors.map(function (error) { return error.message; });
-                            var false_alarm = 'Project already has the associated issue';
-                            if (all_errors.includes(false_alarm)) {
-                                core.warning("Card already exists for issue '" + issue.title + "'.");
-                            }
-                            else {
-                                core.error("Card creation failed for issue '" + issue.title + "'.");
-                            }
-                        });
-                    });
+                    columnId = _a.sent();
+                    return [4 /*yield*/, getNewIssues(client, orgName, issueType, interval)
+                        // Find excluded issues
+                    ];
+                case 3:
+                    newIssues = _a.sent();
+                    excludedIssueIds = new Set();
+                    if (!excludedProjectNumber) return [3 /*break*/, 6];
+                    return [4 /*yield*/, getProjectId(client, orgName, excludedProjectNumber)];
+                case 4:
+                    excludedProjectId = _a.sent();
+                    return [4 /*yield*/, getExcludedIssueIds(client, orgName, excludedProjectId)];
+                case 5:
+                    excludedIssueIds = _a.sent();
+                    _a.label = 6;
+                case 6: return [4 /*yield*/, performFiling(client, columnId, newIssues, excludedIssueIds)];
+                case 7:
+                    _a.sent();
                     return [2 /*return*/];
             }
         });
