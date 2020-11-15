@@ -13,8 +13,8 @@ import { todayOffset } from './util'
  * @return {Issue} - the issue described by the API URL
  */
 async function getIssue (
-    client: Octokit,
-    url: string
+  client: Octokit,
+  url: string
 ): Promise<Issue> {
 
   const { data }: { data: Issue } = await client.request(url)
@@ -37,9 +37,9 @@ async function getIssue (
  * @return {number} - the absolute ID of the project
  */
 async function getProjectId (
-    client: Octokit,
-    orgName: string,
-    projectNumber: number
+  client: Octokit,
+  orgName: string,
+  projectNumber: number
 ): Promise<number> {
 
   // Fetching projects
@@ -66,8 +66,8 @@ async function getProjectId (
  * @return {Array} - the absolute IDs of all columns
  */
 async function getColumnIds (
-    client: Octokit,
-    projectId: number
+  client: Octokit,
+  projectId: number
 ): Promise<Array<number>> {
   const { data: columns } = await client.projects.listColumns({ project_id: projectId })
   core.info(`Retrieved ${columns.length} columns`)
@@ -84,9 +84,9 @@ async function getColumnIds (
  * @return {number} - the absolute ID of the column
  */
 async function getColumnId (
-    client: Octokit,
-    projectId: number,
-    columnName: string
+  client: Octokit,
+  projectId: number,
+  columnName: string
 ): Promise<number> {
 
   // Fetching column
@@ -115,9 +115,9 @@ async function getColumnId (
  * @return {Array} the list of issues created in the given interval
  */
 async function getNewIssues (
-    client: Octokit,
-    orgName: string,
-    interval: number
+  client: Octokit,
+  orgName: string,
+  interval: number
 ): Promise<Array<Issue>> {
 
   // Prepare search query
@@ -132,11 +132,11 @@ async function getNewIssues (
   // Fetch issues
   const newIssues: Array<Issue> = []
   for await (const response of client.paginate.iterator(
-      client.search.issuesAndPullRequests,
-      {
-        q,
-        per_page: 100
-      }
+    client.search.issuesAndPullRequests,
+    {
+      q,
+      per_page: 100
+    }
   )) {
     const { data: issues } = response
     newIssues.push(...issues.map((issue): Issue => ({
@@ -162,9 +162,9 @@ async function getNewIssues (
  * @return {Set} the set of issues that are added to the excluded project
  */
 async function getExcludedIssueIds (
-    client: Octokit,
-    orgName: string,
-    excludedProjectId: number
+  client: Octokit,
+  orgName: string,
+  excludedProjectId: number
 ): Promise<Set<number>> {
 
   // Fetch all columns
@@ -174,21 +174,21 @@ async function getExcludedIssueIds (
   const excludedIssueIds: Set<number> = new Set<number>()
   for (const columnId of columnIds) {
     for await (const response of client.paginate.iterator(
-        client.projects.listCards,
-        {
-          column_id: columnId,
-          archived_state: 'all',
-          per_page: 100
-        }
+      client.projects.listCards,
+      {
+        column_id: columnId,
+        archived_state: 'all',
+        per_page: 100
+      }
     )) {
       const { data: cards } = response
       const issues = await Promise.all(
-          cards
-              .filter((card): boolean => Boolean(card.content_url))
-              .map(async (card): Promise<Issue> => {
-                const content_url = card.content_url
-                return await getIssue(client, content_url)
-              })
+        cards
+          .filter((card): boolean => Boolean(card.content_url))
+          .map(async (card): Promise<Issue> => {
+            const content_url = card.content_url
+            return await getIssue(client, content_url)
+          })
       )
       issues.forEach((issue: Issue): void => {
         excludedIssueIds.add(issue.id)
@@ -210,43 +210,43 @@ async function getExcludedIssueIds (
  * @param {Set} excludedIssues - the set of issues that are added to the excluded project
  */
 async function performFiling (
-    client: Octokit,
-    columnId: number,
-    newIssues: Array<Issue>,
-    excludedIssues: Set<number>
+  client: Octokit,
+  columnId: number,
+  newIssues: Array<Issue>,
+  excludedIssues: Set<number>
 ): Promise<void> {
 
   newIssues
-      .filter((issue: Issue): boolean => {
-        if (excludedIssues.has(issue.id)) {
-          console.log(`Ignoring issue '${issue.title}' as it belongs to excluded project`)
-          return false
-        } else {
-          return true
-        }
-      })
-      .forEach((issue: Issue): void => {
-        // Add non-excluded issues
-        client.projects
-            .createCard({
-              column_id: columnId,
-              content_id: issue.id,
-              content_type: 'Issue'
-            })
-            .then(() => {
-              core.info(`Card creation succeeded for issue '${issue.title}'.`)
-            })
-            .catch(ex => {
-              const all_errors = ex.errors.map((error: Error) => error.message)
-              const false_alarm = 'Project already has the associated issue'
+    .filter((issue: Issue): boolean => {
+      if (excludedIssues.has(issue.id)) {
+        console.log(`Ignoring issue '${issue.title}' as it belongs to excluded project`)
+        return false
+      } else {
+        return true
+      }
+    })
+    .forEach((issue: Issue): void => {
+      // Add non-excluded issues
+      client.projects
+        .createCard({
+          column_id: columnId,
+          content_id: issue.id,
+          content_type: 'Issue'
+        })
+        .then(() => {
+          core.info(`Card creation succeeded for issue '${issue.title}'.`)
+        })
+        .catch(ex => {
+          const all_errors = ex.errors.map((error: Error) => error.message)
+          const false_alarm = 'Project already has the associated issue'
 
-              if (all_errors.includes(false_alarm)) {
-                core.warning(`Card already exists for issue '${issue.title}'.`)
-              } else {
-                core.error(`Card creation failed for issue '${issue.title}'.`)
-              }
-            })
-      })
+          if (all_errors.includes(false_alarm)) {
+            core.warning(`Card already exists for issue '${issue.title}'.`)
+          } else {
+            core.error(`Card creation failed for issue '${issue.title}'.`)
+          }
+        })
+    })
 }
 
 /**
@@ -262,12 +262,12 @@ async function performFiling (
  * @param {number} excludedProjectNumber - the number of the excluded project within the org
  */
 export async function fileIssues (
-    client: Octokit,
-    orgName: string,
-    projectNumber: number,
-    columnName: string,
-    interval: number,
-    excludedProjectNumber: number | null
+  client: Octokit,
+  orgName: string,
+  projectNumber: number,
+  columnName: string,
+  interval: number,
+  excludedProjectNumber: number | null
 ): Promise<void> {
 
   // Find column
