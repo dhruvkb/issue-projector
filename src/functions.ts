@@ -5,6 +5,29 @@ import { Issue, Error } from './types'
 import { todayOffset } from './util'
 
 /**
+ * Get the details of the issue from the given API URL.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {string} url - the API URL of the issue
+ *
+ * @return {Issue} - the issue described by the API URL
+ */
+async function getIssue (
+    client: Octokit,
+    url: string
+): Promise<Issue> {
+
+  const { data }: { data: Issue } = await client.request(url)
+  const issue: Issue = {
+    id: data.id,
+    title: data.title,
+    isPullRequest: Object.prototype.hasOwnProperty.call(data, 'pull_request')
+  }
+  core.info(`Issue: #${issue.id} ${issue.title}`)
+  return issue
+}
+
+/**
  * Get the ID of a project with the given number in the given organisation.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
