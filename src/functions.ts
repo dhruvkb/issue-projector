@@ -58,6 +58,23 @@ async function getProjectId (
 }
 
 /**
+ * Get the IDs of all columns in the given project.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {number} projectId - the absolute ID of the project
+ *
+ * @return {Array} - the absolute IDs of all columns
+ */
+async function getColumnIds (
+    client: Octokit,
+    projectId: number
+): Promise<Array<number>> {
+  const { data: columns } = await client.projects.listColumns({ project_id: projectId })
+  core.info(`Retrieved ${columns.length} columns`)
+  return columns.map(col => col.id)
+}
+
+/**
  * Get the ID of the column with the given name in the given project.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
