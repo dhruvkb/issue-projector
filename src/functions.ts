@@ -90,7 +90,7 @@ async function getIssues (
   ].join('+')
 
   // Fetch issues
-  const allIssues: Array<Issue> = []
+  const newIssues: Array<Issue> = []
   for await (const response of client.paginate.iterator(
       client.search.issuesAndPullRequests,
       {
@@ -99,15 +99,16 @@ async function getIssues (
       }
   )) {
     const { data: issues } = response
-    allIssues.push(...issues.map(issue => ({
+    newIssues.push(...issues.map((issue): Issue => ({
       id: issue.id,
       title: issue.title,
       isPullRequest: Object.prototype.hasOwnProperty.call(issue, 'pull_request')
     })))
-    core.debug(`Fetched ${allIssues.length}/${issues.total_count} issues.`)
+    core.debug(`Fetched ${newIssues.length}/${issues.total_count} issues.`)
   }
 
-  return allIssues
+  core.info(`Retrieved ${newIssues.length} new issues`)
+  return newIssues
 }
 
 /**
