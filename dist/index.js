@@ -4870,7 +4870,7 @@ var client_1 = __webpack_require__(970);
 var functions_1 = __webpack_require__(174);
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var opts, accessToken, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval, client, ex_1;
+        var opts, accessToken, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval, intervalUnit, client, ex_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -4896,9 +4896,14 @@ function main() {
                     core.debug("Issue type: " + issueType);
                     interval = parseInt(core.getInput('INTERVAL') || '1');
                     core.debug("Interval: " + interval);
+                    intervalUnit = core.getInput('INTERVAL_UNIT') || 'd';
+                    if (!['d', 'h'].includes(intervalUnit)) {
+                        throw new Error('Invalid interval unit specified');
+                    }
+                    core.debug("Interval unit: " + intervalUnit);
                     client = client_1.getClient(accessToken);
                     // Perform wonders with the client
-                    return [4 /*yield*/, functions_1.fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval)];
+                    return [4 /*yield*/, functions_1.fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval, intervalUnit)];
                 case 1:
                     // Perform wonders with the client
                     _a.sent();
@@ -4989,28 +4994,76 @@ exports.fileIssues = void 0;
 var core = __importStar(__webpack_require__(186));
 var util_1 = __webpack_require__(629);
 /**
- * Get the details of the issue from the given API URL.
+ * Check if the given issue is already present in the given project.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
- * @param {string} url - the API URL of the issue
- *
- * @return {Issue} - the issue described by the API URL
+ * @param {number} issueId - the ID of the issue whose presence is being checked
+ * @param {number} columnId - any column in the project in which to check for the presence of the issue
  */
-function getIssue(client, url) {
+function isIssueInProject(client, issueId, columnId) {
     return __awaiter(this, void 0, void 0, function () {
-        var data, issue;
+        var _a, isSuccessful, cardId, errors, falseAlarm;
+        return __generator(this, function (_b) {
+            switch (_b.label) {
+                case 0: return [4 /*yield*/, addIssueToColumn(client, issueId, columnId)];
+                case 1:
+                    _a = _b.sent(), isSuccessful = _a.isSuccessful, cardId = _a.data, errors = _a.errors;
+                    if (!isSuccessful) return [3 /*break*/, 4];
+                    core.debug('Card created in excluded project');
+                    if (!cardId) return [3 /*break*/, 3];
+                    return [4 /*yield*/, client.projects
+                            .deleteCard({
+                            card_id: cardId
+                        })];
+                case 2:
+                    _b.sent();
+                    core.debug('Card deleted from excluded project');
+                    _b.label = 3;
+                case 3: return [2 /*return*/, false];
+                case 4:
+                    falseAlarm = 'Project already has the associated issue';
+                    return [2 /*return*/, errors.includes(falseAlarm)];
+            }
+        });
+    });
+}
+/**
+ * Add the issue with the given ID to the given project column.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {number} issueId - the ID of the issue to add to the given column
+ * @param {number} columnId - the absolute ID of the column in which to add the issue
+ */
+function addIssueToColumn(client, issueId, columnId) {
+    return __awaiter(this, void 0, void 0, function () {
+        var outcome, card, ex_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, client.request(url)];
-                case 1:
-                    data = (_a.sent()).data;
-                    issue = {
-                        id: data.id,
-                        title: data.title,
-                        isPullRequest: Object.prototype.hasOwnProperty.call(data, 'pull_request')
+                case 0:
+                    outcome = {
+                        isSuccessful: false,
+                        errors: []
                     };
-                    core.info("Issue: #" + issue.id + " " + issue.title);
-                    return [2 /*return*/, issue];
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 3, , 4]);
+                    return [4 /*yield*/, client.projects
+                            .createCard({
+                            column_id: columnId,
+                            content_id: issueId,
+                            content_type: 'Issue'
+                        })];
+                case 2:
+                    card = (_a.sent()).data;
+                    outcome.isSuccessful = true;
+                    outcome.data = card.id;
+                    return [3 /*break*/, 4];
+                case 3:
+                    ex_1 = _a.sent();
+                    outcome.isSuccessful = false;
+                    outcome.errors = ex_1.errors.map(function (error) { return error.message; });
+                    return [3 /*break*/, 4];
+                case 4: return [2 /*return*/, outcome];
             }
         });
     });
@@ -5095,29 +5148,28 @@ function getColumnId(client, projectId, columnName) {
     });
 }
 /**
- * Get a list of issues created yesterday. This is not exactly 24 hours but
- * rather includes the entirety of 'yesterday' as well as whatever part of
- * 'today' has elapsed when this runs.
+ * Get a list of issues created in the specified time interval.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
  * @param {string} issueType - whether to find new issues, PRs or both
- * @param {number} interval - the number of days to check for updated issues
+ * @param {number} interval - the time period to check for updated issues
+ * @param {string} intervalUnit - the unit of the time period to check for updated issues
  *
  * @return {Array} the list of issues created in the given interval
  */
-function getNewIssues(client, orgName, issueType, interval) {
+function getNewIssues(client, orgName, issueType, interval, intervalUnit) {
     var e_1, _a;
     return __awaiter(this, void 0, void 0, function () {
-        var yesterday, criteria, q, newIssues, _b, _c, response, issues, e_1_1;
+        var startTime, criteria, q, newIssues, _b, _c, response, issues, e_1_1;
         return __generator(this, function (_d) {
             switch (_d.label) {
                 case 0:
-                    yesterday = util_1.todayOffset(-interval).toISOString().split('T')[0];
+                    startTime = util_1.dateOffset(-interval, intervalUnit).toISOString();
                     criteria = [
                         'is:open',
                         "org:" + orgName,
-                        "created:>=" + yesterday
+                        "created:>=" + startTime
                     ];
                     if (issueType != 'any') {
                         criteria.push("is:" + issueType);
@@ -5170,139 +5222,57 @@ function getNewIssues(client, orgName, issueType, interval) {
     });
 }
 /**
- * Get a list of issue IDs that are present in the excluded project. This also
- * includes IDs of pull requests.
- *
- * @param {Octokit} client - the pre-authenticated GitHub client
- * @param {string} orgName - the GitHub username of the organisation
- * @param {number} excludedProjectId - the absolute ID of the excluded project
- *
- * @return {Set} the set of issues that are added to the excluded project
- */
-function getExcludedIssueIds(client, orgName, excludedProjectId) {
-    var e_2, _a;
-    return __awaiter(this, void 0, void 0, function () {
-        var columnIds, excludedIssueIds, _i, columnIds_1, columnId, _b, _c, response, cards, issues, e_2_1;
-        var _this = this;
-        return __generator(this, function (_d) {
-            switch (_d.label) {
-                case 0: return [4 /*yield*/, getColumnIds(client, excludedProjectId)
-                    // Fetch issues
-                ];
-                case 1:
-                    columnIds = _d.sent();
-                    excludedIssueIds = new Set();
-                    _i = 0, columnIds_1 = columnIds;
-                    _d.label = 2;
-                case 2:
-                    if (!(_i < columnIds_1.length)) return [3 /*break*/, 16];
-                    columnId = columnIds_1[_i];
-                    _d.label = 3;
-                case 3:
-                    _d.trys.push([3, 9, 10, 15]);
-                    _b = (e_2 = void 0, __asyncValues(client.paginate.iterator(client.projects.listCards, {
-                        column_id: columnId,
-                        archived_state: 'all',
-                        per_page: 100
-                    })));
-                    _d.label = 4;
-                case 4: return [4 /*yield*/, _b.next()];
-                case 5:
-                    if (!(_c = _d.sent(), !_c.done)) return [3 /*break*/, 8];
-                    response = _c.value;
-                    cards = response.data;
-                    return [4 /*yield*/, Promise.all(cards
-                            .filter(function (card) { return Boolean(card.content_url); })
-                            .map(function (card) { return __awaiter(_this, void 0, void 0, function () {
-                            var content_url;
-                            return __generator(this, function (_a) {
-                                switch (_a.label) {
-                                    case 0:
-                                        content_url = card.content_url;
-                                        return [4 /*yield*/, getIssue(client, content_url)];
-                                    case 1: return [2 /*return*/, _a.sent()];
-                                }
-                            });
-                        }); }))];
-                case 6:
-                    issues = _d.sent();
-                    issues.forEach(function (issue) {
-                        excludedIssueIds.add(issue.id);
-                    });
-                    _d.label = 7;
-                case 7: return [3 /*break*/, 4];
-                case 8: return [3 /*break*/, 15];
-                case 9:
-                    e_2_1 = _d.sent();
-                    e_2 = { error: e_2_1 };
-                    return [3 /*break*/, 15];
-                case 10:
-                    _d.trys.push([10, , 13, 14]);
-                    if (!(_c && !_c.done && (_a = _b.return))) return [3 /*break*/, 12];
-                    return [4 /*yield*/, _a.call(_b)];
-                case 11:
-                    _d.sent();
-                    _d.label = 12;
-                case 12: return [3 /*break*/, 14];
-                case 13:
-                    if (e_2) throw e_2.error;
-                    return [7 /*endfinally*/];
-                case 14: return [7 /*endfinally*/];
-                case 15:
-                    _i++;
-                    return [3 /*break*/, 2];
-                case 16:
-                    core.info("Retrieved " + excludedIssueIds.size + " excluded issues");
-                    return [2 /*return*/, excludedIssueIds];
-            }
-        });
-    });
-}
-/**
  * Add the given new issues to the given project column. This skips over issues
  * that are present in the excluded project.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} columnId - the absolute ID of the column within the project board
+ * @param {string} excludedColumnId - the absolute ID of the column
  * @param {Array} newIssues - the list of issues created in the given interval
- * @param {Set} excludedIssues - the set of issues that are added to the excluded project
  */
-function performFiling(client, columnId, newIssues, excludedIssues) {
+function performFiling(client, columnId, excludedColumnId, newIssues) {
     return __awaiter(this, void 0, void 0, function () {
-        return __generator(this, function (_a) {
-            newIssues
-                .filter(function (issue) {
-                if (excludedIssues.has(issue.id)) {
-                    core.warning("Ignoring issue '" + issue.title + "' as it belongs to excluded project");
-                    return false;
-                }
-                else {
-                    return true;
-                }
-            })
-                .forEach(function (issue) {
-                // Add non-excluded issues
-                client.projects
-                    .createCard({
-                    column_id: columnId,
-                    content_id: issue.id,
-                    content_type: 'Issue'
-                })
-                    .then(function () {
-                    core.info("Card creation succeeded for issue '" + issue.title + "'.");
-                })
-                    .catch(function (ex) {
-                    var all_errors = ex.errors.map(function (error) { return error.message; });
-                    var false_alarm = 'Project already has the associated issue';
-                    if (all_errors.includes(false_alarm)) {
-                        core.warning("Card already exists for issue '" + issue.title + "'.");
+        var _i, newIssues_1, issue, _a, _b, isSuccessful, errors, falseAlarm;
+        return __generator(this, function (_c) {
+            switch (_c.label) {
+                case 0:
+                    _i = 0, newIssues_1 = newIssues;
+                    _c.label = 1;
+                case 1:
+                    if (!(_i < newIssues_1.length)) return [3 /*break*/, 6];
+                    issue = newIssues_1[_i];
+                    _a = excludedColumnId;
+                    if (!_a) return [3 /*break*/, 3];
+                    return [4 /*yield*/, isIssueInProject(client, issue.id, excludedColumnId)];
+                case 2:
+                    _a = (_c.sent());
+                    _c.label = 3;
+                case 3:
+                    if (_a) {
+                        core.warning("Ignoring issue '" + issue.title + "' as it belongs to excluded project");
+                        return [3 /*break*/, 5];
+                    }
+                    return [4 /*yield*/, addIssueToColumn(client, issue.id, columnId)];
+                case 4:
+                    _b = _c.sent(), isSuccessful = _b.isSuccessful, errors = _b.errors;
+                    if (isSuccessful) {
+                        core.info("Card creation succeeded for issue '" + issue.title + "'.");
                     }
                     else {
-                        core.error("Card creation failed for issue '" + issue.title + "'.");
+                        falseAlarm = 'Project already has the associated issue';
+                        if (errors.includes(falseAlarm)) {
+                            core.warning("Card already exists for issue '" + issue.title + "'.");
+                        }
+                        else {
+                            core.error("Card creation failed for issue '" + issue.title + "'.");
+                        }
                     }
-                });
-            });
-            return [2 /*return*/];
+                    _c.label = 5;
+                case 5:
+                    _i++;
+                    return [3 /*break*/, 1];
+                case 6: return [2 /*return*/];
+            }
         });
     });
 }
@@ -5317,37 +5287,42 @@ function performFiling(client, columnId, newIssues, excludedIssues) {
  * @param {string} columnName - the name of the column within the project board
  * @param {number} excludedProjectNumber - the number of the excluded project within the org
  * @param {string} issueType - whether to find new issues, PRs or both
- * @param {number} interval - the number of days to check for updated issues
+ * @param {number} interval - the time period to check for updated issues
+ * @param {string} intervalUnit - the unit of the time period to check for updated issues
  */
-function fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval) {
+function fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval, intervalUnit) {
     return __awaiter(this, void 0, void 0, function () {
-        var projectId, columnId, newIssues, excludedIssueIds, excludedProjectId;
+        var projectId, columnId, excludedProjectId, excludedColumnId, newIssues;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, getProjectId(client, orgName, projectNumber)];
                 case 1:
                     projectId = _a.sent();
                     return [4 /*yield*/, getColumnId(client, projectId, columnName)
-                        // Find new issues
+                        // Find excluded column
                     ];
                 case 2:
                     columnId = _a.sent();
-                    return [4 /*yield*/, getNewIssues(client, orgName, issueType, interval)
-                        // Find excluded issues
-                    ];
-                case 3:
-                    newIssues = _a.sent();
-                    excludedIssueIds = new Set();
-                    if (!excludedProjectNumber) return [3 /*break*/, 6];
+                    excludedProjectId = null;
+                    excludedColumnId = null;
+                    if (!excludedProjectNumber) return [3 /*break*/, 5];
                     return [4 /*yield*/, getProjectId(client, orgName, excludedProjectNumber)];
-                case 4:
+                case 3:
                     excludedProjectId = _a.sent();
-                    return [4 /*yield*/, getExcludedIssueIds(client, orgName, excludedProjectId)];
-                case 5:
-                    excludedIssueIds = _a.sent();
-                    _a.label = 6;
-                case 6: return [4 /*yield*/, performFiling(client, columnId, newIssues, excludedIssueIds)];
+                    return [4 /*yield*/, getColumnIds(client, excludedProjectId)];
+                case 4:
+                    excludedColumnId = (_a.sent())[0];
+                    core.info("Column ID: " + excludedColumnId);
+                    _a.label = 5;
+                case 5: return [4 /*yield*/, getNewIssues(client, orgName, issueType, interval, intervalUnit)
+                    // File new issues
+                ];
+                case 6:
+                    newIssues = _a.sent();
+                    // File new issues
+                    return [4 /*yield*/, performFiling(client, columnId, excludedColumnId, newIssues)];
                 case 7:
+                    // File new issues
                     _a.sent();
                     return [2 /*return*/];
             }
@@ -5365,20 +5340,27 @@ exports.fileIssues = fileIssues;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.todayOffset = void 0;
+exports.dateOffset = void 0;
 /**
- * Get the date that is offset from today by the given delta.
+ * Get the date that is offset from now by the given delta.
  *
- * @param {number} delta - the number of days to add or subtract from today
+ * @param {number} delta - the time period to add or subtract from now
+ * @param {string} deltaUnit - the unit of the time period to add or subtract from now
  */
-function todayOffset(delta) {
+function dateOffset(delta, deltaUnit) {
     if (delta === void 0) { delta = 0; }
+    if (deltaUnit === void 0) { deltaUnit = 'd'; }
     var now = new Date();
     var then = new Date();
-    then.setDate(now.getDate() + delta);
+    if (deltaUnit === 'd') {
+        then.setDate(now.getDate() + delta);
+    }
+    else {
+        then.setHours(now.getHours() + delta);
+    }
     return then;
 }
-exports.todayOffset = todayOffset;
+exports.dateOffset = dateOffset;
 
 
 /***/ }),
