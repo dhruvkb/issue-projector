@@ -16,3 +16,9 @@ export interface Error {
   field: string
   message: string
 }
+
+export interface Outcome<T> {
+  isSuccessful: boolean
+  data?: T
+  errors: Array<string>
+}
