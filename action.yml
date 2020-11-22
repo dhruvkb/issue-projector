@@ -23,9 +23,13 @@ inputs:
     required: false
     default: 'any'
   INTERVAL:
-    description: 'The number of days to check for updated issues'
+    description: 'The time interval to check for updated issues'
     required: false
     default: '1'
+  INTERVAL_UNIT:
+    description: 'The unit of the time interval to check for updated issues'
+    required: false
+    default: 'd'
 runs:
   using: 'node12'
   main: 'dist/index.js'
