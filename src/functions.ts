@@ -1,30 +1,69 @@
 import * as core from '@actions/core'
 import { Octokit } from '@octokit/rest'
 
-import { Error as GitHubError, Issue } from './types'
+import { Error as GitHubError, Issue, Outcome } from './types'
 import { dateOffset } from './util'
 
 /**
- * Get the details of the issue from the given API URL.
+ * Check if the given issue is already present in the given project.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
- * @param {string} url - the API URL of the issue
- *
- * @return {Issue} - the issue described by the API URL
+ * @param {number} issueId - the ID of the issue whose presence is being checked
+ * @param {number} columnId - any column in the project in which to check for the presence of the issue
  */
-async function getIssue (
+async function isIssueInProject (
   client: Octokit,
-  url: string
-): Promise<Issue> {
-
-  const { data }: { data: Issue } = await client.request(url)
-  const issue: Issue = {
-    id: data.id,
-    title: data.title,
-    isPullRequest: Object.prototype.hasOwnProperty.call(data, 'pull_request')
+  issueId: number,
+  columnId: number
+): Promise<boolean> {
+  const { isSuccessful, data: cardId, errors }: Outcome<number> = await addIssueToColumn(client, issueId, columnId)
+  if (isSuccessful) {
+    core.debug('Card created in excluded project')
+    if (cardId) {
+      await client.projects
+        .deleteCard({
+          card_id: cardId
+        })
+      core.debug('Card deleted from excluded project')
+    }
+    return false
+  } else {
+    const falseAlarm = 'Project already has the associated issue'
+    return errors.includes(falseAlarm)
   }
-  core.info(`Issue: #${issue.id} ${issue.title}`)
-  return issue
+}
+
+/**
+ * Add the issue with the given ID to the given project column.
+ *
+ * @param {Octokit} client - the pre-authenticated GitHub client
+ * @param {number} issueId - the ID of the issue to add to the given column
+ * @param {number} columnId - the absolute ID of the column in which to add the issue
+ */
+async function addIssueToColumn (
+  client: Octokit,
+  issueId: number,
+  columnId: number
+): Promise<Outcome<number>> {
+  let outcome: Outcome<number> = {
+    isSuccessful: false,
+    errors: []
+  }
+  try {
+    const { data: card } = await client.projects
+      .createCard({
+        column_id: columnId,
+        content_id: issueId,
+        content_type: 'Issue'
+      })
+    outcome.isSuccessful = true
+    outcome.data = card.id
+  } catch (ex) {
+    outcome.isSuccessful = false
+    outcome.errors = ex.errors.map((error: GitHubError) => error.message)
+  }
+
+  return outcome
 }
 
 /**
@@ -157,101 +196,39 @@ async function getNewIssues (
 }
 
 /**
- * Get a list of issue IDs that are present in the excluded project. This also
- * includes IDs of pull requests.
- *
- * @param {Octokit} client - the pre-authenticated GitHub client
- * @param {string} orgName - the GitHub username of the organisation
- * @param {number} excludedProjectId - the absolute ID of the excluded project
- *
- * @return {Set} the set of issues that are added to the excluded project
- */
-async function getExcludedIssueIds (
-  client: Octokit,
-  orgName: string,
-  excludedProjectId: number
-): Promise<Set<number>> {
-
-  // Fetch all columns
-  const columnIds: Array<number> = await getColumnIds(client, excludedProjectId)
-
-  // Fetch issues
-  const excludedIssueIds: Set<number> = new Set<number>()
-  for (const columnId of columnIds) {
-    for await (const response of client.paginate.iterator(
-      client.projects.listCards,
-      {
-        column_id: columnId,
-        archived_state: 'all',
-        per_page: 100
-      }
-    )) {
-      const { data: cards } = response
-      const issues = await Promise.all(
-        cards
-          .filter((card): boolean => Boolean(card.content_url))
-          .map(async (card): Promise<Issue> => {
-            const content_url = card.content_url
-            return await getIssue(client, content_url)
-          })
-      )
-      issues.forEach((issue: Issue): void => {
-        excludedIssueIds.add(issue.id)
-      })
-    }
-  }
-
-  core.info(`Retrieved ${excludedIssueIds.size} excluded issues`)
-  return excludedIssueIds
-}
-
-/**
  * Add the given new issues to the given project column. This skips over issues
  * that are present in the excluded project.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} columnId - the absolute ID of the column within the project board
+ * @param {string} excludedColumnId - the absolute ID of the column
  * @param {Array} newIssues - the list of issues created in the given interval
- * @param {Set} excludedIssues - the set of issues that are added to the excluded project
  */
 async function performFiling (
   client: Octokit,
   columnId: number,
-  newIssues: Array<Issue>,
-  excludedIssues: Set<number>
+  excludedColumnId: number | null,
+  newIssues: Array<Issue>
 ): Promise<void> {
 
-  newIssues
-    .filter((issue: Issue): boolean => {
-      if (excludedIssues.has(issue.id)) {
-        core.warning(`Ignoring issue '${issue.title}' as it belongs to excluded project`)
-        return false
-      } else {
-        return true
-      }
-    })
-    .forEach((issue: Issue): void => {
-      // Add non-excluded issues
-      client.projects
-        .createCard({
-          column_id: columnId,
-          content_id: issue.id,
-          content_type: 'Issue'
-        })
-        .then(() => {
-          core.info(`Card creation succeeded for issue '${issue.title}'.`)
-        })
-        .catch(ex => {
-          const all_errors = ex.errors.map((error: GitHubError) => error.message)
-          const false_alarm = 'Project already has the associated issue'
+  for (const issue of newIssues) {
+    if (excludedColumnId && await isIssueInProject(client, issue.id, excludedColumnId)) {
+      core.warning(`Ignoring issue '${issue.title}' as it belongs to excluded project`)
+      continue
+    }
 
-          if (all_errors.includes(false_alarm)) {
-            core.warning(`Card already exists for issue '${issue.title}'.`)
-          } else {
-            core.error(`Card creation failed for issue '${issue.title}'.`)
-          }
-        })
-    })
+    const { isSuccessful, errors } = await addIssueToColumn(client, issue.id, columnId)
+    if (isSuccessful) {
+      core.info(`Card creation succeeded for issue '${issue.title}'.`)
+    } else {
+      const falseAlarm = 'Project already has the associated issue'
+      if (errors.includes(falseAlarm)) {
+        core.warning(`Card already exists for issue '${issue.title}'.`)
+      } else {
+        core.error(`Card creation failed for issue '${issue.title}'.`)
+      }
+    }
+  }
 }
 
 /**
@@ -283,15 +260,18 @@ export async function fileIssues (
   const projectId: number = await getProjectId(client, orgName, projectNumber)
   const columnId: number = await getColumnId(client, projectId, columnName)
 
+  // Find excluded column
+  let excludedProjectId: number | null = null
+  let excludedColumnId: number | null = null
+  if (excludedProjectNumber) {
+    excludedProjectId = await getProjectId(client, orgName, excludedProjectNumber)
+    excludedColumnId = (await getColumnIds(client, excludedProjectId))[0]
+    core.info(`Column ID: ${excludedColumnId}`)
+  }
+
   // Find new issues
   const newIssues: Array<Issue> = await getNewIssues(client, orgName, issueType, interval, intervalUnit)
 
-  // Find excluded issues
-  let excludedIssueIds: Set<number> = new Set<number>()
-  if (excludedProjectNumber) {
-    const excludedProjectId: number = await getProjectId(client, orgName, excludedProjectNumber)
-    excludedIssueIds = await getExcludedIssueIds(client, orgName, excludedProjectId)
-  }
-
-  await performFiling(client, columnId, newIssues, excludedIssueIds)
+  // File new issues
+  await performFiling(client, columnId, excludedColumnId, newIssues)
 }
