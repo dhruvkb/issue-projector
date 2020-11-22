@@ -1,6 +1,6 @@
 {
   "name": "issue-projector",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "private": true,
   "scripts": {
     "build": "ncc build src/entrypoint.ts",
