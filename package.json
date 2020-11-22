@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "ncc build src/entrypoint.ts",
-    "watch": "tsc -w -p ."
+    "watch": "tsc -w -p .",
+    "exec": "env $(cat .env 2>/dev/null | xargs) node dist/entrypoint.js"
   },
   "dependencies": {
     "@actions/core": "^1.2.6",
