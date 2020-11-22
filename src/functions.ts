@@ -2,7 +2,7 @@ import * as core from '@actions/core'
 import { Octokit } from '@octokit/rest'
 
 import { Error as GitHubError, Issue } from './types'
-import { todayOffset } from './util'
+import { dateOffset } from './util'
 
 /**
  * Get the details of the issue from the given API URL.
@@ -104,14 +104,13 @@ async function getColumnId (
 }
 
 /**
- * Get a list of issues created yesterday. This is not exactly 24 hours but
- * rather includes the entirety of 'yesterday' as well as whatever part of
- * 'today' has elapsed when this runs.
+ * Get a list of issues created in the specified time interval.
  *
  * @param {Octokit} client - the pre-authenticated GitHub client
  * @param {string} orgName - the GitHub username of the organisation
  * @param {string} issueType - whether to find new issues, PRs or both
- * @param {number} interval - the number of days to check for updated issues
+ * @param {number} interval - the time period to check for updated issues
+ * @param {string} intervalUnit - the unit of the time period to check for updated issues
  *
  * @return {Array} the list of issues created in the given interval
  */
@@ -119,15 +118,16 @@ async function getNewIssues (
   client: Octokit,
   orgName: string,
   issueType: string,
-  interval: number
+  interval: number,
+  intervalUnit: string
 ): Promise<Array<Issue>> {
 
   // Prepare search query
-  const [yesterday,] = todayOffset(-interval).toISOString().split('T')
+  let startTime = dateOffset(-interval, intervalUnit).toISOString()
   const criteria = [
     'is:open',
     `org:${orgName}`,
-    `created:>=${yesterday}`
+    `created:>=${startTime}`
   ]
   if (issueType != 'any') {
     criteria.push(`is:${issueType}`)
@@ -265,7 +265,8 @@ async function performFiling (
  * @param {string} columnName - the name of the column within the project board
  * @param {number} excludedProjectNumber - the number of the excluded project within the org
  * @param {string} issueType - whether to find new issues, PRs or both
- * @param {number} interval - the number of days to check for updated issues
+ * @param {number} interval - the time period to check for updated issues
+ * @param {string} intervalUnit - the unit of the time period to check for updated issues
  */
 export async function fileIssues (
   client: Octokit,
@@ -274,7 +275,8 @@ export async function fileIssues (
   columnName: string,
   excludedProjectNumber: number | null,
   issueType: string,
-  interval: number
+  interval: number,
+  intervalUnit: string
 ): Promise<void> {
 
   // Find column
@@ -282,7 +284,7 @@ export async function fileIssues (
   const columnId: number = await getColumnId(client, projectId, columnName)
 
   // Find new issues
-  const newIssues: Array<Issue> = await getNewIssues(client, orgName, issueType, interval)
+  const newIssues: Array<Issue> = await getNewIssues(client, orgName, issueType, interval, intervalUnit)
 
   // Find excluded issues
   let excludedIssueIds: Set<number> = new Set<number>()

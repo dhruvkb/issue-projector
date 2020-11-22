@@ -36,10 +36,25 @@ async function main (): Promise<void> {
     let interval: number = parseInt(core.getInput('INTERVAL') || '1')
     core.debug(`Interval: ${interval}`)
 
+    let intervalUnit: string = core.getInput('INTERVAL_UNIT') || 'd'
+    if (!['d', 'h'].includes(intervalUnit)) {
+      throw new Error('Invalid interval unit specified')
+    }
+    core.debug(`Interval unit: ${intervalUnit}`)
+
     // Prepare Octokit client
     const client: Octokit = getClient(accessToken)
     // Perform wonders with the client
-    await fileIssues(client, orgName, projectNumber, columnName, excludedProjectNumber, issueType, interval)
+    await fileIssues(
+      client,
+      orgName,
+      projectNumber,
+      columnName,
+      excludedProjectNumber,
+      issueType,
+      interval,
+      intervalUnit
+    )
   } catch (ex) {
     core.setFailed(ex.message)
   }
