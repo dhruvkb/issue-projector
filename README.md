@@ -30,7 +30,7 @@ GitHub Project.
    file. This variables defined in the file are a little different because we
    prepend `INPUT_` to each of the inputs that the script takes.
    ```bash
-   INPUT_ACCESS_TOKEN='486aa6349a2a17a3c83b9f649c09b592a7b81368'
+   INPUT_ACCESS_TOKEN='REDACTED'
    INPUT_ORG_NAME='purelyfortesting'
    INPUT_PROJECT_NUMBER='1'
    INPUT_COLUMN_NAME='Pending_Review'
