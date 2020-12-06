@@ -26,4 +26,4 @@ deploy:
   target_branch: master
   committer_from_gh: true
   on:
-    branch: master
+    branch: develop
