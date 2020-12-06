@@ -25,4 +25,5 @@ yarn-debug.log*
 yarn-error.log*
 
 # Output files
+/dist
 /docs
