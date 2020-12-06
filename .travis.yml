@@ -8,6 +8,10 @@ node_js:
 
 cache: npm
 
+branches:
+  only:
+    - develop
+
 install: npm install
 
 script: echo 'Hello World'
