@@ -5,7 +5,7 @@
   "scripts": {
     "build": "ncc build src/entrypoint.ts",
     "watch": "tsc -w -p .",
-    "exec": "env $(cat .env 2>/dev/null | xargs) node dist/entrypoint.js"
+    "exec": "node -r dotenv/config dist/entrypoint.js"
   },
   "dependencies": {
     "@actions/core": "^1.2.6",
@@ -14,6 +14,7 @@
   "devDependencies": {
     "@types/node": "^14.10.0",
     "@vercel/ncc": "^0.25.1",
+    "dotenv": "^8.2.0",
     "typescript": "^4.0.3"
   }
 }
