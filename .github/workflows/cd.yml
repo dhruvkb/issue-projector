@@ -47,5 +47,6 @@ jobs:
       run: |
         git checkout --orphan deploy
         git add .
+        git add --force dist/index.js
         git commit -m "Deploy"
         git push --force origin deploy:master
