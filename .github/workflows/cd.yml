@@ -3,7 +3,7 @@ name: CD
 on:
   push:
     branches:
-    - master
+    - develop
 
 env:
   CI: true
@@ -12,7 +12,6 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
