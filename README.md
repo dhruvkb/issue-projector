@@ -1,3 +1,6 @@
+> [!CAUTION]
+> This package is not being maintained. Please don't use it.
+
 # Issue projector
 
 Automatically find issues updated within the given time period and add them to a
