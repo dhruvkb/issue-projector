@@ -8,7 +8,7 @@
     "exec": "node -r dotenv/config dist/entrypoint.js"
   },
   "dependencies": {
-    "@actions/core": "^1.2.6",
+    "@actions/core": "^1.9.1",
     "@octokit/rest": "^18.0.9"
   },
   "devDependencies": {
